@@ -1,0 +1,127 @@
+---
+title: Analysis script
+subtitle: Oddball with Cognitive model
+author:
+- Mathias Sablé-Meyer
+date: 1st Semester 2019
+lang: en
+output:
+  tufte::tufte_html:
+    smart: true
+    toc: true
+    toc_depth: 1
+---
+
+```{r someTools, echo = FALSE, cache = FALSE, message=FALSE}
+# This loads packages and install them if need be:
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(ggplot2,
+               ggthemes,
+               reshape2,
+               jsonlite,
+               tufte,
+               knitr,
+               pander,
+               plyr,
+               dplyr,
+               magrittr,
+               tibble,
+               tidyr,
+               grid,
+               broom,
+               cowplot,
+               png,
+               ggimage,
+               #kableExtra,
+               install = TRUE)
+
+knitr::opts_chunk$set(fig.lp  = '')
+knitr::opts_chunk$set(cache   = FALSE)
+knitr::opts_chunk$set(autodep = TRUE)
+knitr::opts_chunk$set(autodep = TRUE)
+knitr::opts_chunk$set(echo    = FALSE)
+#knitr::opts_chunk$set(results = 'asis')
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(tidy = TRUE)
+
+#accent <- "#B21512"
+#second <- "#096BB2"
+#color1 <- "#B21512"
+#color2 <- "#096BB2"
+bg     <- "#ffffff"
+
+nothing <- "$\\varnothing{}$"
+
+myTheme <- theme_get() +
+           theme(panel.background = element_rect(fill = bg),
+                 legend.background = element_rect(fill = bg),
+                 plot.background = element_rect(fill = bg)) +
+	   theme(axis.text.y=element_text(colour="black")) +
+	   theme(axis.text.x=element_text(colour="black"))
+theme_set(myTheme)
+
+## Let's not print too many digits for the human eye
+options(digits=3)
+se <- function(x) {
+  sd(x) / sqrt(length(x))
+}
+```
+
+```{r}
+french <- read.csv("french.csv") %>%
+  select(-X, -sd, -se) %>%
+  mutate(layer = "french")
+shapesInOrder <- c("square", "losange", "rectangle", "parallelogram", "isoTrapezoid", "trapezoid", "rightKite", "kite", "hinge", "rustedHinge", "random", "catOrBird", "train")
+```
+
+```{r}
+m_french <- french  %>%
+  select(mean) %>%
+  summarize_all(mean) %$%
+  mean
+
+json <- data.frame(mean = fromJSON("./result.json"),
+                   shape = c("rectangle", "rightKite", "hinge", "parallelogram", "kite", "rustedHinge", "isoTrapezoid", "trapezoid", "random", "square", "losange"))
+num_repetition <- json$num_repetition
+d <- json %>%
+  group_by(shape) %>%
+  mutate(layer = "model1") %>%
+  ungroup
+m_model <- d %>%
+  select(mean) %>%
+  summarize_all(mean) %$%
+  mean
+p <- d %>%
+  rbind(french) %>%
+  mutate(shape = factor(shape, levels = shapesInOrder)) %>%
+  ggplot(aes(y = mean, x = layer, fill = shape)) +
+  geom_bar(stat="identity", width=0.8, position=position_dodge(width=0.8)) +
+  #geom_errorbar(aes(ymin=mean-se, ymax=mean+se),width=0, position=position_dodge(width=0.8)) +
+  ylim(0,1) +
+  geom_hline(aes(yintercept=m_model), size=0.1) +
+  annotate("text", y = m_model + 0.025, x = 2.1, label="Model1 mean", size=4.3) +
+  geom_hline(aes(yintercept=m_french), size=0.1) +
+  annotate("text", y = m_french - 0.025, x = 1.1, label="French mean", size=4.3) +
+  geom_hline(yintercept=1/6) +
+  xlab("Model") + ylab("Success Rate") +
+  #theme(legend.text=element_text(size=45)) +
+  #scale_fill_discrete(name="Shape", labels=rep("     ",22)) +
+  annotate("text", y = 1/6 + 0.025, x = 2, label="Chance Level", size=4.3)
+
+#draw_legend <- function(pl, l, s, xmin, ymax, dy) {
+  #i <- 0
+  #for (f in l) {
+    #pl <- ggdraw(pl) +
+      #draw_image(f, x = xmin, y = ymax-(i*dy), width = s)
+    #i <- i + 1
+  #} 
+  #return(pl)
+#}
+
+#p <- draw_legend(p, pngs_target, 0.04, 0.92, 0.385, 0.0735)
+p 
+#ggsave(filename = "/tmp/model1.pdf", width = 40/3, height = 20/3)
+```
+
