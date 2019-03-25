@@ -1,1 +1,6 @@
 *.dump
+*.jpg
+__pycache__
+result*.json
+*.html
+res
