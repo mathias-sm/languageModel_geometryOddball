@@ -31,11 +31,15 @@ import model2
 import csv
 import itertools
 
-from pathos.multiprocessing import Pool
+import copy
+import inspect
 
-from scipy import optimize
+from skopt import Optimizer, dump, Space
+from skopt.learning import GaussianProcessRegressor
+from skopt.learning.gaussian_process.kernels import Matern
+from skopt.space import Real
+from sklearn.externals.joblib import Parallel, delayed
 
-from skopt import gp_minimize, dump, load
 import matplotlib.pyplot as plt
 from skopt.plots import plot_objective, plot_evaluations
 
@@ -55,7 +59,6 @@ def run(subject_jnd_l = 1, subject_jnd_a = 1, subject_jnd_d = 1, angle_baseline_
   num_repetition = 1000
   success = np.empty(11)
   i = 0
-  pool = Pool(processes=4)
   for name, observed in observable_data.items():
     tmp = []
     def process(t):
@@ -69,15 +72,20 @@ def run(subject_jnd_l = 1, subject_jnd_a = 1, subject_jnd_d = 1, angle_baseline_
                                     angle_baseline_a,
                                     angle_baseline_d))
       return results
-    tmp = pool.map(process, [(0,1), (0,2), (0,3), (0,4), (1,0), (2,0), (3,0), (4,0)])
+    tmp = []
+    for t in [(0,1), (0,2), (0,3), (0,4), (1,0), (2,0), (3,0), (4,0)]:
+        tmp.append(process(t))
     success[i] = np.mean(tmp)
     i += 1
   return success
 
 def show_optimized(optimized):
-  _ = plot_objective(optimized)
-  _ = plot_evaluations(optimized)
-  print(optimized)
+  p1 = plot_objective(optimized)
+  p2 = plot_evaluations(optimized)
+  plt.set_cmap("viridis")
+  plt.grid()
+  plt.legend()
+  plt.show()
 
 
 def search():
@@ -89,15 +97,22 @@ def search():
     print("f({},{},{},{},{}) = {}".format(x0,x1,x2,x3,x4, new))
     return new
   
-  optimized = gp_minimize(processInput,
-                     [(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0)],
-                     x0=(0.4,0.4,0.2,0.7,0.7),
-                     n_calls=120,
-                     n_random_starts=12,
-                     verbose=True,
-                     n_jobs=-1)
-  dump(optimized, "toto.dump", store_objective=False)
-  show_optimized(optimized)
+  optimizer = Optimizer(
+      dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0)],
+      n_initial_points=320 # For a good-ish global estimation
+  )
+
+  result = None
+  for i in range(20): 
+    print("Inner {}/20".format(i+1))
+    x = optimizer.ask(n_points=32)
+    y = Parallel(n_jobs=32)(delayed(processInput)(t) for t in x)
+    result = optimizer.tell(x, y)
+    result.specs = {'args': {}, 'function': {}} # Dummy specs, never useful
+    dump(result, "partial_{}.dump.gz".format(i), store_objective=False, compress=9)
+
+  dump(result, "full_run.dump", store_objective=False, compress=9)
+  show_optimized(result)
 
 if __name__ == "__main__":
   arguments = docopt(__doc__, version='0.0.1')
