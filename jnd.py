@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -30,15 +29,15 @@ def draw_jnd_direction(v, subject_jnd_d, angle_baseline_d):
     return draw_jnd_angle(direction, subject_jnd_d, angle_baseline_d)
 
 def draw(obs, subject_jnd_l, subject_jnd_a, subject_jnd_d, angle_baseline_a, angle_baseline_d):
-    return np.array([draw_jnd_length(obs[0], subject_jnd_l),
-                    draw_jnd_length(obs[1], subject_jnd_l),
-                    draw_jnd_length(obs[2], subject_jnd_l),
-                    draw_jnd_angle(obs[6], subject_jnd_a, angle_baseline_a),
-                    draw_jnd_angle(obs[7], subject_jnd_a, angle_baseline_a),
-                    draw_jnd_angle(obs[8], subject_jnd_a, angle_baseline_a),
-                    draw_jnd_direction(obs[0], subject_jnd_d, angle_baseline_d),
-                    draw_jnd_direction(obs[1], subject_jnd_d, angle_baseline_d),
-                    draw_jnd_direction(obs[2], subject_jnd_d, angle_baseline_d),
+    return np.array([draw_jnd_length(obs[0],    subject_jnd_l),
+                     draw_jnd_length(obs[1],    subject_jnd_l),
+                     draw_jnd_length(obs[2],    subject_jnd_l),
+                     draw_jnd_angle(obs[6],     subject_jnd_a, angle_baseline_a),
+                     draw_jnd_angle(obs[7],     subject_jnd_a, angle_baseline_a),
+                     draw_jnd_angle(obs[8],     subject_jnd_a, angle_baseline_a),
+                     draw_jnd_direction(obs[0], subject_jnd_d, angle_baseline_d),
+                     draw_jnd_direction(obs[1], subject_jnd_d, angle_baseline_d),
+                     draw_jnd_direction(obs[2], subject_jnd_d, angle_baseline_d),
     ])
 
 def corr_list_angle(l, subject_jnd):
