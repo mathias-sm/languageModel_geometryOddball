@@ -1,6 +1,6 @@
 
 default:
 	#python main.py
-	cp result.json ./analysis/
+	cp results.csv ./analysis/
 	R -e "rmarkdown::render('analysis/analysis.Rmd')"
 	firefox ./analysis/analysis.html

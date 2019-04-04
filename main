@@ -1,133 +1,211 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """Model runner for the oddball cognition
 
+Can either run a single simulation, search in some space of parameters, or
+display the results of a finished past search dumped to disk.
+
 Usage:
-  main run <jnd_length> <jnd_angle> <jnd_direction> <angle_baseline_a> <angle_baseline_d>
+  main run <jnd_length> <jnd_angle> <jnd_direction> <angle_baseline_a> <angle_baseline_d> <repetitions_per_run>
   main show <optimized_dump>
-  main search
+  main search <n_trials_total> <n_trials_random> <repetitions_per_run>
   main (-h | --help)
 
 Options:
   -h --help     Show this screen.
 """
+
+# Documentation
 from docopt import docopt
 
-
-"""A file to simulate the two models Stan and I have
-"""
-
-import pickle
-import json
-import random
-import string
+# From this project
 import material
-import math
-import numpy as np
-import collections
 import model1
 import model2
+import display_results
+
+# Other
 import csv
-import itertools
+import psutil
+import tqdm
+import numpy as np
 
-import copy
-import inspect
-
-from skopt import Optimizer, dump, Space
-from skopt.learning import GaussianProcessRegressor
-from skopt.learning.gaussian_process.kernels import Matern
-from skopt.space import Real
+from skopt import Optimizer, dump, load
 from sklearn.externals.joblib import Parallel, delayed
 
-import matplotlib.pyplot as plt
-from skopt.plots import plot_objective, plot_evaluations
+def init_obs():
+    """ Pre-computes useful stuff to be used everywhere from the material
+    """
+    return material.pre_compute()
 
-# Precompute things for faster execution
-observable_data = material.pre_compute()
-# Load the ref data from french
-ref = np.empty(11)
-i = 0
-with open('french_small.csv', 'r') as csvfile:
-    spamreader = csv.reader(csvfile, delimiter=',')
-    for row in spamreader:
-      ref[i] = float(row[1])
-      i += 1
+def init_ref():
+    """ Pre-loads the reference data from behavioural experiment
+    """
+    reference_data = np.empty(11)
+    i = 0
+    with open('french_small.csv', 'r') as csvfile:
+        spamreader = csv.reader(csvfile, delimiter=',')
+        for row in spamreader:
+            reference_data[i] = float(row[1])
+            i += 1
+    return reference_data
+
+def run(subject_jnd_l = 1,
+        subject_jnd_a = 1,
+        angle_baseline_a=0.7,
+        subject_jnd_d = 1,
+        angle_baseline_d=0.7,
+        repetitions_per_run = 250,
+        parallel = False):
+    """ Forward run of a simulation given parameters
+
+    Given a set of parameters *for a subject* simulates all shapes a certain
+    amount of time and return a summary of the results
+
+    subject_jnd_l: float
+                   JND parameter for lengths for a given subject
+    subject_jnd_a, angle_baseline_a: float
+                   JND parameters for angles in jnd*|sin(a + baseline)| fashion
+    subject_jnd_a, angle_baseline_a: float
+                   JND parameters for directions, similar than for angles
+    parallel: bool
+              Whether the run should try to parallelize over shapes
+
+    Returns
+    -------
+    np.array(int) of size 11
+        Mean success rate for each of the 11 shapes after simulation.
+    """
+
+    observable_data = init_obs()
+    success = []
+    def processShape(s):
+        name, observed = s
+        def process(t):
+            results = []
+            for j in range(repetitions_per_run):
+                results.append(model1.model(observed[t[0]],
+                                            observed[t[1]],
+                                            subject_jnd_l,
+                                            subject_jnd_a,
+                                            subject_jnd_d,
+                                            angle_baseline_a,
+                                            angle_baseline_d))
+            return results
+        tmp = []
+        conditions = [(0,1), (0,2), (0,3), (0,4), (1,0), (2,0), (3,0), (4,0)]
+        for t in conditions:
+            tmp.append(process(t))
+        return np.mean(tmp[0:3]), np.mean(tmp[4:7])
+    if not parallel:
+        for s in observable_data.items():
+            success.append(processShape(s))
+    else:
+        n_cpus = psutil.cpu_count()
+        success = Parallel(n_jobs=n_cpus)(delayed(processShape)(s) for s in observable_data.items())
+    return success
 
 
-def run(subject_jnd_l = 1, subject_jnd_a = 1, subject_jnd_d = 1, angle_baseline_a=0.7, angle_baseline_d=0.7):
-  num_repetition = 1000
-  success = np.empty(11)
-  i = 0
-  for name, observed in observable_data.items():
-    tmp = []
-    def process(t):
-      results = []
-      for j in range(num_repetition):
-        results.append(model1.model(observed[t[0]],
-                                    observed[t[1]],
-                                    subject_jnd_l,
-                                    subject_jnd_a,
-                                    subject_jnd_d,
-                                    angle_baseline_a,
-                                    angle_baseline_d))
-      return results
-    tmp = []
-    for t in [(0,1), (0,2), (0,3), (0,4), (1,0), (2,0), (3,0), (4,0)]:
-        tmp.append(process(t))
-    success[i] = np.mean(tmp)
-    i += 1
-  return success
+def search(n_trials_total = 640,
+           n_trials_random = 320,
+           repetitions_per_run = 250):
+    """ Search the best parameters in some space
 
-def show_optimized(optimized):
-  p1 = plot_objective(optimized)
-  p2 = plot_evaluations(optimized)
-  plt.set_cmap("viridis")
-  plt.grid()
-  plt.legend()
-  plt.show()
+    The arguments dictate how many simulation should be run, as well as
+    how precise each simulation should be.
+    
+    n_trials_total:  int
+                     How many points should be tried in total
+    n_trials_random: int
+                     Out of those, how many should be sampled randomly and
+                     uniformly?
+    repetitions_per_run: int
+                         Each simulation is itself the mean of repeated draws,
+                         how many such repeated draws should be use (higher ->
+                         more precise but longer)
+    
 
+    Returns
+    -------
+    nothing
+        Sides effect include:
+        * Writing the results to disk, as well as intermediary steps in case of
+          failure or early stopping
+        * Calling the visualisation function on the results, whatever that
+          function does
+    """
 
-def search():
+    # Pre-load behavioural data
+    reference_data = init_ref()
 
-  def processInput(t):
-    x0,x1,x2,x3,x4 = t
-    r = run(x0,x1,x2,x3,x4)
-    new = np.sum((r-ref)**2)
-    print("f({},{},{},{},{}) = {}".format(x0,x1,x2,x3,x4, new))
-    return new
-  
-  optimizer = Optimizer(
-      dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0)],
-      n_initial_points=320 # For a good-ish global estimation
-  )
+    # Assert input makes sense
+    assert(n_trials_random <= n_trials_total)
 
-  result = None
-  for i in range(20): 
-    print("Inner {}/20".format(i+1))
-    x = optimizer.ask(n_points=32)
-    y = Parallel(n_jobs=32)(delayed(processInput)(t) for t in x)
-    result = optimizer.tell(x, y)
-    result.specs = {'args': {}, 'function': {}} # Dummy specs, never useful
-    dump(result, "partial_{}.dump.gz".format(i), store_objective=False, compress=9)
+    # Function to process a single set of parameters
+    def processInput(t):
+        x0,x1,x2,x3,x4 = t
+        r = run(x0,x1,x2,x3,x4,
+                repetitions_per_run,
+                parallel=False)
+        r = np.array(np.mean(r,1))
+        new = np.sum((r-reference_data)**2)
+        return new
 
-  dump(result, "full_run.dump", store_objective=False, compress=9)
-  show_optimized(result)
+    # Initialize the optimizer with the search bounds as well as the amount of
+    # random points to try
+    optimizer = Optimizer(
+        dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0)],
+        n_initial_points=n_trials_random
+    )
+
+    # Determine how much we can parallelize and adjust loops accorgingly
+    n_cpus = psutil.cpu_count()
+    loop_size = round(n_trials_total / n_cpus)
+
+    result = None
+    for i in tqdm.tqdm(range(loop_size)):
+        # Ask the optimizer which points we should focus on
+        x = optimizer.ask(n_points=n_cpus)
+        # Parallelize the computation for this set of points
+        y = Parallel(n_jobs=n_cpus)(delayed(processInput)(t) for t in x)
+        # Tell the optimizer the results for next round
+        result = optimizer.tell(x, y)
+        result.specs = {'args': {}, 'function': {}} # Dummy specs, never useful
+        dump(result, "partial_{}.dump.gz".format(i), store_objective=False, compress=9)
+
+    dump(result, "full_run.dump", store_objective=False, compress=9)
+    display_results.show_optimized(result)
 
 if __name__ == "__main__":
-  arguments = docopt(__doc__, version='0.0.1')
-  if arguments["search"]:
-    search()
-  elif arguments["run"]:
-    r = run(float(arguments["<jnd_length>"]),
-            float(arguments["<jnd_angle>"]),
-            float(arguments["<jnd_direction>"]),
-            float(arguments["<angle_baseline_a>"]),
-            float(arguments["<angle_baseline_d>"]))
-    print(np.sum((r-ref)**2))
-    r = np.ndarray.tolist(r)
-    with open('result.json', 'w') as fp:
-      json.dump(r, fp)
-  elif arguments["show"]:
-    optimized = load(arguments["<optimized_dump>"])
-    show_optimized(optimized)
+    """ Parse arguments and call relevant functions — or die trying
+    """
+
+    arguments = docopt(__doc__, version='0.0.1')
+    if arguments["search"]:
+        search(int(arguments["<n_trials_random>"]),
+               int(arguments["<n_trials_total>"]),
+               int(arguments["<repetitions_per_run>"]))
+    elif arguments["run"]:
+        r = run(float(arguments["<jnd_length>"]),
+                float(arguments["<jnd_angle>"]),
+                float(arguments["<jnd_direction>"]),
+                float(arguments["<angle_baseline_a>"]),
+                float(arguments["<angle_baseline_d>"]),
+                int(arguments["<repetitions_per_run>"]),
+                parallel=True)
+        reference_data = init_ref()
+        num_rep = arguments["<repetitions_per_run>"]
+        print(np.sum((np.mean(r,1)-reference_data)**2))
+        with open('results.csv', 'w', newline='') as csvfile:
+            spamwriter = csv.writer(csvfile, delimiter=',')
+            spamwriter.writerow(["shape", "mean", "mostlyRegularShapes", "num_rep"])
+            i = 0
+            for name, _ in material.allShapes.items():
+                spamwriter.writerow([name, r[i][0], True,num_rep])
+                spamwriter.writerow([name, r[i][1], False,num_rep])
+                i += 1
+    elif arguments["show"]:
+        optimized = load(arguments["<optimized_dump>"])
+        display_results.show_optimized(optimized)
+    else:
+        print("I died trying. Docopt should allow this though.")

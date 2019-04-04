@@ -71,7 +71,7 @@ se <- function(x) {
 
 ```{r}
 french <- read.csv("french.csv") %>%
-  select(-X, -sd, -se) %>%
+  select(-X, -sd) %>%
   mutate(layer = "french")
 shapesInOrder <- c("square", "losange", "rectangle", "parallelogram", "isoTrapezoid", "trapezoid", "rightKite", "kite", "hinge", "rustedHinge", "random", "catOrBird", "train")
 ```
@@ -82,12 +82,17 @@ m_french <- french  %>%
   summarize_all(mean) %$%
   mean
 
-json <- data.frame(mean = fromJSON("./result.json"),
-                   shape = c("rectangle", "rightKite", "hinge", "parallelogram", "kite", "rustedHinge", "isoTrapezoid", "trapezoid", "random", "square", "losange"))
-num_repetition <- json$num_repetition
-d <- json %>%
+#json <- data.frame(mean = fromJSON("./result.json"),
+                   #shape = c("rectangle", "rightKite", "hinge", "parallelogram", "kite", "rustedHinge", "isoTrapezoid", "trapezoid", "random", "square", "losange"))
+#num_repetition <- json$num_repetition
+fromCsv <- read.csv("results.csv")
+num_repetition <- 2 * (fromCsv$num_rep[1])
+d <- fromCsv %>%
+  select(-mostlyRegularShapes, -num_rep) %>%
   group_by(shape) %>%
-  mutate(layer = "model1") %>%
+  summarize_all(mean) %>%
+  mutate(layer = "model1",
+         se = sqrt(mean*(1 - mean))/sqrt(num_repetition)) %>%
   ungroup
 m_model <- d %>%
   select(mean) %>%
@@ -95,10 +100,10 @@ m_model <- d %>%
   mean
 p <- d %>%
   rbind(french) %>%
-  mutate(shape = factor(shape, levels = shapesInOrder)) %>%
+  mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
   ggplot(aes(y = mean, x = layer, fill = shape)) +
   geom_bar(stat="identity", width=0.8, position=position_dodge(width=0.8)) +
-  #geom_errorbar(aes(ymin=mean-se, ymax=mean+se),width=0, position=position_dodge(width=0.8)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se),width=0, position=position_dodge(width=0.8)) +
   ylim(0,1) +
   geom_hline(aes(yintercept=m_model), size=0.1) +
   annotate("text", y = m_model + 0.025, x = 2.1, label="Model1 mean", size=4.3) +
