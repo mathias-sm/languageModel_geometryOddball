@@ -6,13 +6,16 @@ Can either run a single simulation, search in some space of parameters, or
 display the results of a finished past search dumped to disk.
 
 Usage:
-  main run <jnd_length> <jnd_angle> <jnd_direction> <angle_baseline_a> <angle_baseline_d> <repetitions_per_run>
-  main show <optimized_dump>
-  main search <n_trials_total> <n_trials_random> <repetitions_per_run>
+  main run [options]
+  main search <n_trials_random> <n_trials_total> [options]
+  main show <optimized_dump> [--output=FILE]
   main (-h | --help)
 
 Options:
-  -h --help     Show this screen.
+  --model=<l>    Model to use [default: 1]
+  --reps=<n>     Model to use [default: 250]
+  --params FILE  File containing the parameters (JSON) to use [default: parameters.json]
+  -h --help      Show this screen.
 """
 
 # Documentation
@@ -20,14 +23,14 @@ from docopt import docopt
 
 # From this project
 import material
-import model1
-import model2
 import display_results
 
 # Other
 import csv
+import json
 import psutil
 import tqdm
+import importlib
 import numpy as np
 
 from skopt import Optimizer, dump, load
@@ -50,11 +53,7 @@ def init_ref():
             i += 1
     return reference_data
 
-def run(subject_jnd_l = 1,
-        subject_jnd_a = 1,
-        angle_baseline_a=0.7,
-        subject_jnd_d = 1,
-        angle_baseline_d=0.7,
+def run(parameters,
         repetitions_per_run = 250,
         parallel = False):
     """ Forward run of a simulation given parameters
@@ -62,12 +61,10 @@ def run(subject_jnd_l = 1,
     Given a set of parameters *for a subject* simulates all shapes a certain
     amount of time and return a summary of the results
 
-    subject_jnd_l: float
-                   JND parameter for lengths for a given subject
-    subject_jnd_a, angle_baseline_a: float
-                   JND parameters for angles in jnd*|sin(a + baseline)| fashion
-    subject_jnd_a, angle_baseline_a: float
-                   JND parameters for directions, similar than for angles
+    parameters: float tuple
+                A list of parameters to give to the model
+    repetitions_per_run: int
+                         How many times should we sample before averaging
     parallel: bool
               Whether the run should try to parallelize over shapes
 
@@ -79,39 +76,41 @@ def run(subject_jnd_l = 1,
 
     observable_data = init_obs()
     success = []
+
+    # Function to process a single shape
     def processShape(s):
         name, observed = s
         def process(t):
             results = []
             for j in range(repetitions_per_run):
-                results.append(model1.model(observed[t[0]],
-                                            observed[t[1]],
-                                            subject_jnd_l,
-                                            subject_jnd_a,
-                                            subject_jnd_d,
-                                            angle_baseline_a,
-                                            angle_baseline_d))
+                results.append(model.model(observed[t[0]],
+                                           observed[t[1]],
+                                           parameters))
             return results
         tmp = []
         conditions = [(0,1), (0,2), (0,3), (0,4), (1,0), (2,0), (3,0), (4,0)]
         for t in conditions:
             tmp.append(process(t))
         return np.mean(tmp[0:3]), np.mean(tmp[4:7])
-    if not parallel:
-        for s in observable_data.items():
-            success.append(processShape(s))
-    else:
+
+    # Map over the possible shapes the previous function
+    if parallel:
         n_cpus = psutil.cpu_count()
         success = Parallel(n_jobs=n_cpus)(delayed(processShape)(s) for s in observable_data.items())
+    else:
+        for s in observable_data.items():
+            success.append(processShape(s))
+
     return success
 
 
 def search(n_trials_total = 640,
            n_trials_random = 320,
-           repetitions_per_run = 250):
+           repetitions_per_run = 250,
+           model = 1):
     """ Search the best parameters in some space
 
-    The arguments dictate how many simulation should be run, as well as
+    The args dictate how many simulation should be run, as well as
     how precise each simulation should be.
     
     n_trials_total:  int
@@ -142,9 +141,8 @@ def search(n_trials_total = 640,
     assert(n_trials_random <= n_trials_total)
 
     # Function to process a single set of parameters
-    def processInput(t):
-        x0,x1,x2,x3,x4 = t
-        r = run(x0,x1,x2,x3,x4,
+    def processInput(parameters):
+        r = run(parameters,
                 repetitions_per_run,
                 parallel=False)
         r = np.array(np.mean(r,1))
@@ -153,10 +151,17 @@ def search(n_trials_total = 640,
 
     # Initialize the optimizer with the search bounds as well as the amount of
     # random points to try
-    optimizer = Optimizer(
-        dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0)],
-        n_initial_points=n_trials_random
-    )
+    optimizer = None
+    if model == 1:
+        optimizer = Optimizer(
+            dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0)],
+            n_initial_points=n_trials_random
+        )
+    elif model == 2:
+        optimizer = Optimizer(
+            dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0), (0., 20.), (0.,20.), (0.,20.)],
+            n_initial_points=n_trials_random
+        )
 
     # Determine how much we can parallelize and adjust loops accorgingly
     n_cpus = psutil.cpu_count()
@@ -173,29 +178,46 @@ def search(n_trials_total = 640,
         result.specs = {'args': {}, 'function': {}} # Dummy specs, never useful
         dump(result, "partial_{}.dump.gz".format(i), store_objective=False, compress=9)
 
-    dump(result, "full_run.dump", store_objective=False, compress=9)
+    dump(result, "full_run.dump.gz", store_objective=False, compress=9)
     display_results.show_optimized(result)
 
 if __name__ == "__main__":
-    """ Parse arguments and call relevant functions — or die trying
+    """ Parse args and call relevant functions — or die trying
     """
 
-    arguments = docopt(__doc__, version='0.0.1')
-    if arguments["search"]:
-        search(int(arguments["<n_trials_random>"]),
-               int(arguments["<n_trials_total>"]),
-               int(arguments["<repetitions_per_run>"]))
-    elif arguments["run"]:
-        r = run(float(arguments["<jnd_length>"]),
-                float(arguments["<jnd_angle>"]),
-                float(arguments["<jnd_direction>"]),
-                float(arguments["<angle_baseline_a>"]),
-                float(arguments["<angle_baseline_d>"]),
-                int(arguments["<repetitions_per_run>"]),
-                parallel=True)
+    args = docopt(__doc__, version='0.0.1')
+
+    # Oh, look, a dynamic loading based on a str concatenated with an arg...!
+    model = importlib.import_module("model"+args["--model"])
+
+    if args["search"]:
+        search(int(args["<n_trials_total>"]),
+               int(args["<n_trials_random>"]),
+               int(args["--reps"]),
+               int(args["--model"]))
+
+    elif args["run"]:
+        # Loads the model's parameters from the relevant file and CLI args
+        num_rep = int(args["--reps"])
+        params = json.loads(open(args["--params"]).read())
+        parameters = [
+            params["jnd_length"],
+            params["jnd_angle"],
+            params["jnd_direction"],
+            params["angle_baseline_a"],
+            params["angle_baseline_d"]
+        ]
+        if int(args["--model"]) == 2:
+            parameters += [params["coef_l"], params["coef_a"], params["coef_d"]]
+
+        # Run said model
+        r = run(parameters, num_rep, parallel=True)
+
+        # Output the metric for quick feedback
         reference_data = init_ref()
-        num_rep = arguments["<repetitions_per_run>"]
         print(np.sum((np.mean(r,1)-reference_data)**2))
+
+        # Saves the detailed averages to the csv file
         with open('results.csv', 'w', newline='') as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=',')
             spamwriter.writerow(["shape", "mean", "mostlyRegularShapes", "num_rep"])
@@ -204,8 +226,9 @@ if __name__ == "__main__":
                 spamwriter.writerow([name, r[i][0], True,num_rep])
                 spamwriter.writerow([name, r[i][1], False,num_rep])
                 i += 1
-    elif arguments["show"]:
-        optimized = load(arguments["<optimized_dump>"])
-        display_results.show_optimized(optimized)
+
+    elif args["show"]:
+        optimized = load(args["<optimized_dump>"])
+        display_results.show_optimized(optimized, args["--output"])
     else:
-        print("I died trying. Docopt should allow this though.")
+        print("I died trying. Docopt shouldn't allow this though.")

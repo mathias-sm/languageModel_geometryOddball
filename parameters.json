@@ -1,0 +1,10 @@
+{
+    "jnd_length": 10,
+    "jnd_angle": 10,
+    "jnd_direction": 10,
+    "angle_baseline_a": 10,
+    "angle_baseline_d": 10,
+    "coef_l": 10,
+    "coef_a": 10,
+    "coef_d": 10
+}

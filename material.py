@@ -78,7 +78,8 @@ def observed_values(shape):
     angle_aapbp = angle2d(-shape[0], shape[2] - shape[0])
     angle_abbp  = angle2d(shape[1]-shape[2], shape[0] - shape[2])
     angle_apab  = angle2d(-shape[1], shape[2] - shape[1])
-    return [v_apbp, v_bbp, v_abp, v_apb, v_aap, v_ab, angle_apbpb, angle_aapbp, angle_abbp, angle_apab]
+    return [v_apbp, v_bbp, v_abp, v_apb, v_aap, v_ab,
+            angle_apbpb, angle_aapbp, angle_abbp, angle_apab]
 
 def pre_compute():
     observable_data = dict()
