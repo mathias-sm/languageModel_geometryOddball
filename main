@@ -46,7 +46,7 @@ def init_ref():
     """
     reference_data = np.empty(11)
     i = 0
-    with open('french_small.csv', 'r') as csvfile:
+    with open('behavioural_data/french_small.csv', 'r') as csvfile:
         spamreader = csv.reader(csvfile, delimiter=',')
         for row in spamreader:
             reference_data[i] = float(row[1])
