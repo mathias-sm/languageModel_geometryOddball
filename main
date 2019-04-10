@@ -154,12 +154,12 @@ def search(n_trials_total = 640,
     optimizer = None
     if model == 1:
         optimizer = Optimizer(
-            dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0)],
+            dimensions=[(0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0)],
             n_initial_points=n_trials_random
         )
     elif model == 2:
         optimizer = Optimizer(
-            dimensions=[(0.0,2.0), (0.0,2.0), (0.0,2.0), (0.0,1.0), (0.0,1.0), (0., 20.), (0.,20.), (0.,20.)],
+            dimensions=[(0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0), (0., 50.), (0.,50.), (0.,50.)],
             n_initial_points=n_trials_random
         )
 
