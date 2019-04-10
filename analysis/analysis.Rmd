@@ -35,31 +35,23 @@ pacman::p_load(ggplot2,
                #kableExtra,
                install = TRUE)
 
-knitr::opts_chunk$set(fig.lp  = '')
 knitr::opts_chunk$set(cache   = FALSE)
 knitr::opts_chunk$set(autodep = TRUE)
-knitr::opts_chunk$set(autodep = TRUE)
 knitr::opts_chunk$set(echo    = FALSE)
-#knitr::opts_chunk$set(results = 'asis')
 knitr::opts_chunk$set(warning = FALSE)
 knitr::opts_chunk$set(error = FALSE)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(tidy = TRUE)
 
-#accent <- "#B21512"
-#second <- "#096BB2"
-#color1 <- "#B21512"
-#color2 <- "#096BB2"
-bg     <- "#ffffff"
-
-nothing <- "$\\varnothing{}$"
+bg     <- "#fffff8"
 
 myTheme <- theme_get() +
            theme(panel.background = element_rect(fill = bg),
                  legend.background = element_rect(fill = bg),
                  plot.background = element_rect(fill = bg)) +
-	   theme(axis.text.y=element_text(colour="black")) +
-	   theme(axis.text.x=element_text(colour="black"))
+            theme(axis.text.y=element_text(colour="black")) +
+            theme(axis.text.x=element_text(colour="black"))
+
 theme_set(myTheme)
 
 ## Let's not print too many digits for the human eye
@@ -70,11 +62,13 @@ se <- function(x) {
 ```
 
 ```{r}
-french <- read.csv("french.csv") %>%
+french <- read.csv("../behavioural_data/french.csv") %>%
   select(-X, -sd) %>%
   mutate(layer = "french")
 shapesInOrder <- c("square", "losange", "rectangle", "parallelogram", "isoTrapezoid", "trapezoid", "rightKite", "kite", "hinge", "rustedHinge", "random", "catOrBird", "train")
 ```
+
+# Comparison of bar plots
 
 ```{r}
 m_french <- french  %>%
@@ -82,23 +76,20 @@ m_french <- french  %>%
   summarize_all(mean) %$%
   mean
 
-#json <- data.frame(mean = fromJSON("./result.json"),
-                   #shape = c("rectangle", "rightKite", "hinge", "parallelogram", "kite", "rustedHinge", "isoTrapezoid", "trapezoid", "random", "square", "losange"))
-#num_repetition <- json$num_repetition
 fromCsv <- read.csv("results.csv")
 num_repetition <- 2 * (fromCsv$num_rep[1])
 d <- fromCsv %>%
   select(-mostlyRegularShapes, -num_rep) %>%
   group_by(shape) %>%
   summarize_all(mean) %>%
-  mutate(layer = "model1",
+  mutate(layer = "model",
          se = sqrt(mean*(1 - mean))/sqrt(num_repetition)) %>%
   ungroup
 m_model <- d %>%
   select(mean) %>%
   summarize_all(mean) %$%
   mean
-p <- d %>%
+d %>%
   rbind(french) %>%
   mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
   ggplot(aes(y = mean, x = layer, fill = shape)) +
@@ -106,27 +97,36 @@ p <- d %>%
   geom_errorbar(aes(ymin=mean-se, ymax=mean+se),width=0, position=position_dodge(width=0.8)) +
   ylim(0,1) +
   geom_hline(aes(yintercept=m_model), size=0.1) +
-  annotate("text", y = m_model + 0.025, x = 2.1, label="Model1 mean", size=4.3) +
+  annotate("text", y = m_model + 0.025, x = 2.1, label="Model mean", size=4.3) +
   geom_hline(aes(yintercept=m_french), size=0.1) +
   annotate("text", y = m_french - 0.025, x = 1.1, label="French mean", size=4.3) +
   geom_hline(yintercept=1/6) +
   xlab("Model") + ylab("Success Rate") +
-  #theme(legend.text=element_text(size=45)) +
-  #scale_fill_discrete(name="Shape", labels=rep("     ",22)) +
   annotate("text", y = 1/6 + 0.025, x = 2, label="Chance Level", size=4.3)
+```
 
-#draw_legend <- function(pl, l, s, xmin, ymax, dy) {
-  #i <- 0
-  #for (f in l) {
-    #pl <- ggdraw(pl) +
-      #draw_image(f, x = xmin, y = ymax-(i*dy), width = s)
-    #i <- i + 1
-  #} 
-  #return(pl)
-#}
+# Correlation : plot and parameters
 
-#p <- draw_legend(p, pngs_target, 0.04, 0.92, 0.385, 0.0735)
-p 
-#ggsave(filename = "/tmp/model1.pdf", width = 40/3, height = 20/3)
+```{r fig.margin}
+d %>%
+  rbind(french) %>%
+  mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
+  select(shape,mean, layer) %>%
+  group_by(shape) %>%
+  spread(key="layer", value="mean") %>%
+  ggplot(aes(x = french, y = model)) +
+  geom_smooth(method="lm") +
+  geom_point()
+```
+```{r}
+d %>%
+  rbind(french) %>%
+  mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
+  select(shape,mean, layer) %>%
+  group_by(shape) %>%
+  spread(key="layer", value="mean") %>%
+  lm(french ~ model, data=.) %>%
+  summary %>%
+  pander
 ```
 
