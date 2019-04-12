@@ -11,12 +11,16 @@ def model(set1, set2, parameters):
 
     # Unpack the parameters. This may fail if you mess up which model you want
     # to use since they don't have the same number of parameters.
-    s_jnd_l = parameters[0]
+    s_jnd_l, s_jnd_a, s_jnd_d, base_a, base_d = parameters
 
     drawned = []
     for i in range(5):
         drawned.append(jnd.draw_lengths(set1, s_jnd_l))
+        drawned.append(jnd.draw_angles(set1, s_jnd_a, base_a))
+        drawned.append(jnd.draw_directions(set1, s_jnd_d, base_d))
     drawned.append(jnd.draw_lengths(set2, s_jnd_l))
+    drawned.append(jnd.draw_angles(set2, s_jnd_a, base_a))
+    drawned.append(jnd.draw_directions(set2, s_jnd_d, base_d))
 
     # For each shape, compute its distance to the mean of all the 5 others
     dist_to_bar = np.empty((6))

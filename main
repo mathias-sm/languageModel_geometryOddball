@@ -154,10 +154,26 @@ def search(n_trials_total = 640,
     optimizer = None
     if model == 1:
         optimizer = Optimizer(
-            dimensions=[(0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0)],
+            dimensions=[(0.0,1.0)],
             n_initial_points=n_trials_random
         )
     elif model == 2:
+        optimizer = Optimizer(
+            dimensions=[(0.0,1.0), (0.0,1.0)],
+            n_initial_points=n_trials_random
+        )
+    elif model == 3:
+        optimizer = Optimizer(
+            dimensions=[(0.0,1.0), (0.0,1.0)],
+            n_initial_points=n_trials_random
+        )
+    elif model == 4:
+        optimizer = Optimizer(
+            dimensions=[(0.0,1.0), (0.0,1.0), (0.0,1.0), (0.0,1.0), (0.0,1.0),
+                (0.0,1.0)],
+            n_initial_points=n_trials_random
+        )
+    elif model == 5:
         optimizer = Optimizer(
             dimensions=[(0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0), (0.0,5.0), (0., 50.), (0.,50.), (0.,50.)],
             n_initial_points=n_trials_random
@@ -200,18 +216,24 @@ if __name__ == "__main__":
         # Loads the model's parameters from the relevant file and CLI args
         num_rep = int(args["--reps"])
         params = json.loads(open(args["--params"]).read())
-        parameters = [
-            params["jnd_length"],
-            params["jnd_angle"],
-            params["jnd_direction"],
-            params["angle_baseline_a"],
-            params["angle_baseline_d"]
-        ]
-        if int(args["--model"]) == 2:
-            parameters += [params["coef_l"], params["coef_a"], params["coef_d"]]
+        parameters = []
+        model_n = int(args["--model"])
+        if model_n == 1:
+            parameters = [params["jnd_length"]]
+        elif model_n == 2:
+            parameters = [params["jnd_angle"], params["angle_baseline_a"]]
+        elif model_n == 3:
+            parameters = [params["jnd_direction"], params["angle_baseline_d"]]
+        elif model_n == 4:
+            parameters = [params["jnd_length"],
+                          params["jnd_angle"], params["angle_baseline_a"],
+                          params["jnd_direction"], params["angle_baseline_d"]]
+        elif model_n == 5:
+            assert(False)
+
 
         # Run said model
-        r = run(parameters, num_rep, parallel=True)
+        r = run(parameters, num_rep, parallel=False)
 
         # Output the metric for quick feedback
         reference_data = init_ref()

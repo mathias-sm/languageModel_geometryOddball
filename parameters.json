@@ -1,10 +1,10 @@
 {
-    "jnd_length": 10,
-    "jnd_angle": 10,
-    "jnd_direction": 10,
-    "angle_baseline_a": 10,
-    "angle_baseline_d": 10,
-    "coef_l": 10,
-    "coef_a": 10,
-    "coef_d": 10
+    "jnd_length": 0.15,
+    "jnd_angle": 0.25,
+    "jnd_direction": 0.25,
+    "angle_baseline_a": 0.7,
+    "angle_baseline_d": 0.7,
+    "coef_l": 1,
+    "coef_a": 1,
+    "coef_d": 1
 }
