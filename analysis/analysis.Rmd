@@ -76,28 +76,64 @@ m_french <- french  %>%
   summarize_all(mean) %$%
   mean
 
-fromCsv <- read.csv("results.csv")
-num_repetition <- 2 * (fromCsv$num_rep[1])
-d <- fromCsv %>%
+model1 <- read.csv("best_model1.csv")
+model2 <- read.csv("best_model2.csv")
+num_rep1 <- 2 * (model1$num_rep[1])
+num_rep2 <- 2 * (model2$num_rep[1])
+d1 <- model1 %>%
   select(-mostlyRegularShapes, -num_rep) %>%
   group_by(shape) %>%
   summarize_all(mean) %>%
-  mutate(layer = "model",
-         se = sqrt(mean*(1 - mean))/sqrt(num_repetition)) %>%
+  mutate(layer = "model1",
+         se = sqrt(mean*(1 - mean))/sqrt(num_rep1)) %>%
   ungroup
-m_model <- d %>%
+d2 <- model2 %>%
+  select(-mostlyRegularShapes, -num_rep) %>%
+  group_by(shape) %>%
+  summarize_all(mean) %>%
+  mutate(layer = "model2",
+         se = sqrt(mean*(1 - mean))/sqrt(num_rep2)) %>%
+  ungroup
+
+m_model1 <- d1 %>%
   select(mean) %>%
   summarize_all(mean) %$%
   mean
-d %>%
+
+m_model2 <- d2 %>%
+  select(mean) %>%
+  summarize_all(mean) %$%
+  mean
+
+```
+
+```{r}
+d1 %>%
   rbind(french) %>%
   mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
   ggplot(aes(y = mean, x = layer, fill = shape)) +
   geom_bar(stat="identity", width=0.8, position=position_dodge(width=0.8)) +
   geom_errorbar(aes(ymin=mean-se, ymax=mean+se),width=0, position=position_dodge(width=0.8)) +
   ylim(0,1) +
-  geom_hline(aes(yintercept=m_model), size=0.1) +
-  annotate("text", y = m_model + 0.025, x = 2.1, label="Model mean", size=4.3) +
+  geom_hline(aes(yintercept=m_model1), size=0.1) +
+  annotate("text", y = m_model1 + 0.025, x = 2.1, label="Model1 mean", size=4.3) +
+  geom_hline(aes(yintercept=m_french), size=0.1) +
+  annotate("text", y = m_french - 0.025, x = 1.1, label="French mean", size=4.3) +
+  geom_hline(yintercept=1/6) +
+  xlab("Model") + ylab("Success Rate") +
+  annotate("text", y = 1/6 + 0.025, x = 2, label="Chance Level", size=4.3)
+```
+
+```{r}
+d2 %>%
+  rbind(french) %>%
+  mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
+  ggplot(aes(y = mean, x = layer, fill = shape)) +
+  geom_bar(stat="identity", width=0.8, position=position_dodge(width=0.8)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se),width=0, position=position_dodge(width=0.8)) +
+  ylim(0,1) +
+  geom_hline(aes(yintercept=m_model2), size=0.1) +
+  annotate("text", y = m_model2 + 0.025, x = 2.1, label="Model2 mean", size=4.3) +
   geom_hline(aes(yintercept=m_french), size=0.1) +
   annotate("text", y = m_french - 0.025, x = 1.1, label="French mean", size=4.3) +
   geom_hline(yintercept=1/6) +
@@ -107,25 +143,47 @@ d %>%
 
 # Correlation : plot and parameters
 
-```{r fig.margin}
-d %>%
+```{r}
+d1 %>%
   rbind(french) %>%
   mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
   select(shape,mean, layer) %>%
   group_by(shape) %>%
   spread(key="layer", value="mean") %>%
-  ggplot(aes(x = french, y = model)) +
+  ggplot(aes(x = french, y = model1)) +
   geom_smooth(method="lm") +
   geom_point()
 ```
+
 ```{r}
-d %>%
+d2 %>%
   rbind(french) %>%
   mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
   select(shape,mean, layer) %>%
   group_by(shape) %>%
   spread(key="layer", value="mean") %>%
-  lm(french ~ model, data=.) %>%
+  ggplot(aes(x = french, y = model2)) +
+  geom_smooth(method="lm") +
+  geom_point()
+```
+
+```{r}
+d1 %>%
+  rbind(french) %>%
+  mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
+  select(shape,mean, layer) %>%
+  group_by(shape) %>%
+  spread(key="layer", value="mean") %>%
+  lm(french ~ model1, data=.) %>%
+  summary %>%
+  pander
+d2 %>%
+  rbind(french) %>%
+  mutate(shape = factor(shape, levels = shapesInOrder,)) %>%
+  select(shape,mean, layer) %>%
+  group_by(shape) %>%
+  spread(key="layer", value="mean") %>%
+  lm(french ~ model2, data=.) %>%
   summary %>%
   pander
 ```
